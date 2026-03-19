@@ -1,0 +1,14 @@
+# Backend
+backend/venv/
+backend/__pycache__/
+backend/*.pyc
+backend/.env
+
+# Frontend (future)
+frontend/node_modules/
+frontend/dist/
+
+# OS / Editor
+.vscode/
+.idea/
+.DS_Store
