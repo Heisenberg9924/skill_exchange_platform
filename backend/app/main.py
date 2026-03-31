@@ -1,18 +1,34 @@
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 
-from app.db.database import engine, Base
-from app.models import user_model
-from app.routes import auth_routes
-from app.routes import user_routes
+from app.api import api_router
+from app.core.config import settings
+from app.db.database import Base, engine
+from app import models
 
-Base.metadata.create_all(bind=engine)
 
-app = FastAPI()
+@asynccontextmanager
+async def lifespan(_: FastAPI):
+    # Keep startup bootstrap lightweight for local development until migrations are run.
+    Base.metadata.create_all(bind=engine)
+    yield
 
-app.include_router(auth_routes.router)
-app.include_router(user_routes.router)
+
+app = FastAPI(title=settings.project_name, lifespan=lifespan)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=settings.cors_origins,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+app.include_router(api_router, prefix=settings.api_v1_prefix)
 
 
 @app.get("/")
-def home():
-    return {"message": "Backend Running"}
+def healthcheck():
+    return {"message": f"{settings.project_name} API is running"}

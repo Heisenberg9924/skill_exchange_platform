@@ -1,0 +1,270 @@
+:root {
+  --bg: #f4eee1;
+  --bg-accent: radial-gradient(circle at top left, #f8d6a6 0, transparent 32%),
+    radial-gradient(circle at top right, #c6ddc8 0, transparent 28%),
+    linear-gradient(180deg, #f8f4ed 0%, #ece2d1 100%);
+  --surface: rgba(255, 252, 245, 0.84);
+  --surface-strong: #fffaf0;
+  --border: rgba(60, 46, 28, 0.12);
+  --text: #1e1a17;
+  --muted: #665d54;
+  --primary: #b14d28;
+  --primary-dark: #7d3419;
+  --success: #2e6f45;
+  --warning: #b0670a;
+  --shadow: 0 20px 45px rgba(92, 64, 24, 0.12);
+  font-family: "Space Grotesk", sans-serif;
+  color: var(--text);
+  background: var(--bg);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  background: var(--bg-accent);
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+}
+
+button {
+  cursor: pointer;
+}
+
+input,
+select,
+textarea {
+  width: 100%;
+  margin-top: 0.45rem;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 0.9rem 1rem;
+  background: rgba(255, 255, 255, 0.8);
+}
+
+textarea {
+  resize: vertical;
+}
+
+label {
+  display: block;
+  font-size: 0.95rem;
+  color: var(--muted);
+}
+
+h1,
+h2,
+h3,
+p {
+  margin-top: 0;
+}
+
+h1,
+h2,
+h3 {
+  font-family: "Fraunces", serif;
+  line-height: 1.05;
+}
+
+.page-shell {
+  width: min(1200px, calc(100% - 2rem));
+  margin: 0 auto;
+  padding: 2rem 0 3rem;
+}
+
+.auth-shell,
+.dashboard-grid,
+.dual-grid {
+  display: grid;
+  gap: 1.5rem;
+}
+
+.auth-shell {
+  min-height: 100vh;
+  align-items: center;
+  grid-template-columns: 1.1fr 0.9fr;
+}
+
+.dashboard-header {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  align-items: start;
+  margin-bottom: 1.5rem;
+}
+
+.dashboard-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  margin-bottom: 1.5rem;
+}
+
+.dual-grid {
+  grid-template-columns: minmax(280px, 360px) 1fr;
+  margin-bottom: 1.5rem;
+}
+
+.hero-card,
+.panel,
+.subpanel {
+  border: 1px solid var(--border);
+  border-radius: 28px;
+  background: var(--surface);
+  backdrop-filter: blur(18px);
+  box-shadow: var(--shadow);
+}
+
+.hero-card {
+  padding: 3rem;
+}
+
+.auth-panel,
+.panel,
+.subpanel {
+  padding: 1.5rem;
+}
+
+.panel-wide {
+  margin-bottom: 1.5rem;
+}
+
+.panel-heading {
+  margin-bottom: 1rem;
+}
+
+.eyebrow,
+.match-label {
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  font-size: 0.72rem;
+  color: var(--primary-dark);
+  font-weight: 700;
+}
+
+.hero-copy,
+.meta-line,
+.helper-text,
+.empty-state,
+.panel-heading p {
+  color: var(--muted);
+}
+
+.stack {
+  display: grid;
+  gap: 1rem;
+}
+
+.compact-form {
+  margin-top: 1rem;
+}
+
+.inline-actions {
+  display: flex;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.primary-button,
+.ghost-button {
+  border-radius: 999px;
+  padding: 0.8rem 1.2rem;
+  border: 1px solid transparent;
+  transition: transform 140ms ease, background-color 140ms ease;
+}
+
+.primary-button {
+  background: var(--primary);
+  color: #fff7f1;
+}
+
+.primary-button:hover,
+.ghost-button:hover {
+  transform: translateY(-1px);
+}
+
+.ghost-button {
+  background: transparent;
+  border-color: var(--border);
+  color: var(--text);
+}
+
+.card-list {
+  display: grid;
+  gap: 1rem;
+}
+
+.item-card {
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  padding: 1rem;
+  background: var(--surface-strong);
+}
+
+.item-card-accent {
+  background: linear-gradient(135deg, #fffaf2 0%, #f2ead9 100%);
+}
+
+.item-header {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  align-items: center;
+  margin-bottom: 0.75rem;
+}
+
+.pill {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  padding: 0.35rem 0.75rem;
+  font-size: 0.8rem;
+  font-weight: 700;
+  text-transform: capitalize;
+}
+
+.pill-offer,
+.pill-accepted,
+.pill-completed {
+  background: rgba(46, 111, 69, 0.12);
+  color: var(--success);
+}
+
+.pill-request,
+.pill-pending {
+  background: rgba(176, 103, 10, 0.12);
+  color: var(--warning);
+}
+
+.pill-rejected,
+.pill-cancelled {
+  background: rgba(177, 77, 40, 0.12);
+  color: var(--primary-dark);
+}
+
+.form-error,
+.global-error {
+  color: #8f2717;
+  background: rgba(185, 60, 27, 0.1);
+  border-radius: 14px;
+  padding: 0.85rem 1rem;
+}
+
+@media (max-width: 900px) {
+  .auth-shell,
+  .dashboard-grid,
+  .dual-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .dashboard-header {
+    flex-direction: column;
+  }
+}
