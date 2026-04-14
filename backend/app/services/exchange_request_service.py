@@ -8,6 +8,7 @@ from app.schemas.exchange_request_schema import (
     ExchangeRequestCreate,
     ExchangeRequestStatusUpdate,
 )
+from app.services.llm_service import draft_exchange_message
 
 
 def _query_requests(db: Session):
@@ -79,7 +80,8 @@ def create_exchange_request(
         recipient_id=requested_skill.user_id,
         requested_skill_id=requested_skill.id,
         offered_skill_id=offered_skill.id if offered_skill else None,
-        message=payload.message,
+        message=payload.message
+        or draft_exchange_message(requested_skill, offered_skill, current_user.name),
     )
     db.add(exchange_request)
     db.commit()

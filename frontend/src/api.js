@@ -44,13 +44,29 @@ export const api = {
     request(`/skills/${skillId}`, { method: "PUT", token, body }),
   deleteSkill: (token, skillId) =>
     request(`/skills/${skillId}`, { method: "DELETE", token }),
+  suggestSkill: (body) => request("/skills/ai-suggest", { method: "POST", body }),
   getMatches: (token) => request("/skills/matches/me", { token }),
+  searchSkills: (token, query) =>
+    request(`/skills/search?q=${encodeURIComponent(query)}`, { token }),
   listExchangeRequests: (token) => request("/exchange-requests/", { token }),
   createExchangeRequest: (token, body) =>
     request("/exchange-requests/", { method: "POST", token, body }),
   updateExchangeRequestStatus: (token, requestId, body) =>
     request(`/exchange-requests/${requestId}/status`, {
       method: "PATCH",
+      token,
+      body,
+    }),
+  listChatThreads: (token) => request("/chat/threads", { token }),
+  createChatThread: (token, exchangeRequestId) =>
+    request(`/chat/threads/${exchangeRequestId}`, {
+      method: "POST",
+      token,
+    }),
+  getChatThread: (token, threadId) => request(`/chat/threads/${threadId}`, { token }),
+  sendChatMessage: (token, threadId, body) =>
+    request(`/chat/threads/${threadId}/messages`, {
+      method: "POST",
       token,
       body,
     }),

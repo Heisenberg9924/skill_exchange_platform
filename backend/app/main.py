@@ -7,12 +7,19 @@ from app.api import api_router
 from app.core.config import settings
 from app.db.database import Base, engine
 from app import models
+from app.db.database import SessionLocal
+from app.services.skill_service import backfill_skill_metadata
 
 
 @asynccontextmanager
 async def lifespan(_: FastAPI):
     # Keep startup bootstrap lightweight for local development until migrations are run.
     Base.metadata.create_all(bind=engine)
+    db = SessionLocal()
+    try:
+        backfill_skill_metadata(db)
+    finally:
+        db.close()
     yield
 
 

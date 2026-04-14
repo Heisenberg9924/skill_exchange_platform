@@ -1,13 +1,23 @@
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, Depends, Query, status
 from sqlalchemy.orm import Session
 
-from app.schemas.skill_schema import MatchResponse, SkillCreate, SkillResponse, SkillUpdate
+from app.schemas.skill_schema import (
+    MatchResponse,
+    SkillCreate,
+    SkillResponse,
+    SkillSearchResponse,
+    SkillSuggestionRequest,
+    SkillSuggestionResponse,
+    SkillUpdate,
+)
 from app.schemas.user_schema import MessageResponse
+from app.services.llm_service import suggest_skill_listing
 from app.services.skill_service import (
     create_skill,
     delete_skill,
     get_matches_for_user,
     list_skills,
+    search_skills,
     update_skill,
 )
 from app.utils.dependencies import get_current_user, get_db
@@ -27,6 +37,11 @@ def get_my_skills(
     db: Session = Depends(get_db),
 ):
     return list_skills(db, current_user.id)
+
+
+@router.post("/ai-suggest", response_model=SkillSuggestionResponse)
+def get_skill_suggestions(payload: SkillSuggestionRequest):
+    return suggest_skill_listing(payload.model_dump())
 
 
 @router.post("/", response_model=SkillResponse, status_code=status.HTTP_201_CREATED)
@@ -64,3 +79,12 @@ def get_my_matches(
     db: Session = Depends(get_db),
 ):
     return get_matches_for_user(db, current_user)
+
+
+@router.get("/search", response_model=list[SkillSearchResponse])
+def search_skill_listings(
+    q: str = Query(min_length=2),
+    current_user=Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    return search_skills(db, q, current_user)

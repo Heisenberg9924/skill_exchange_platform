@@ -38,3 +38,8 @@ class User(Base):
         back_populates="recipient",
         foreign_keys="ExchangeRequest.recipient_id",
     )
+    sent_chat_messages = relationship(
+        "ChatMessage",
+        back_populates="sender",
+        foreign_keys="ChatMessage.sender_id",
+    )

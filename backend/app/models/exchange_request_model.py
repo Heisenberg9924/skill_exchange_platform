@@ -61,3 +61,9 @@ class ExchangeRequest(Base):
         back_populates="offered_exchange_requests",
         foreign_keys=[offered_skill_id],
     )
+    chat_thread = relationship(
+        "ChatThread",
+        back_populates="exchange_request",
+        uselist=False,
+        cascade="all, delete-orphan",
+    )

@@ -1,0 +1,575 @@
+Skill Exchange Platform Workflow
+================================
+
+0. ASCII architecture diagram
+-----------------------------
+
+```
+                           +---------------------------+
+                           |        Browser UI         |
+                           | React + Vite frontend     |
+                           | frontend/src/App.jsx      |
+                           +------------+--------------+
+                                        |
+                                        | HTTP / JSON
+                                        v
+                           +---------------------------+
+                           |       FastAPI API         |
+                           | backend/app/main.py       |
+                           | backend/app/api.py        |
+                           +------------+--------------+
+                                        |
+               +------------------------+------------------------+
+               |                        |                        |
+               v                        v                        v
+   +----------------------+   +----------------------+   +----------------------+
+   |   Auth services      |   |   Skill services     |   | Exchange + Chat      |
+   | auth_services.py     |   | skill_service.py     |   | exchange_request_    |
+   |                      |   | llm_service.py       |   | service.py           |
+   +----------+-----------+   +----------+-----------+   | chat_service.py      |
+              |                          |               +----------+-----------+
+              |                          |                          |
+              +--------------------------+--------------------------+
+                                         |
+                                         | SQLAlchemy ORM
+                                         v
+                           +---------------------------+
+                           |         SQLite DB         |
+                           | backend/skill_exchange.db |
+                           +---------------------------+
+                           | users                     |
+                           | skills                    |
+                           | skill_tags                |
+                           | exchange_requests         |
+                           | chat_threads              |
+                           | chat_messages             |
+                           +---------------------------+
+
+
+                           +---------------------------+
+                           |       Ollama server       |
+                           | http://localhost:11434    |
+                           +------------+--------------+
+                                        |
+                 +----------------------+----------------------+
+                 |                                             |
+                 v                                             v
+   +---------------------------+              +---------------------------+
+   | llama3.2:latest           |              | nomic-embed-text:latest  |
+   | chat completions          |              | embeddings                |
+   | listing assistant         |              | semantic search           |
+   | auto-tagging              |              | semantic matching         |
+   +---------------------------+              +---------------------------+
+```
+
+```
+High-level request flow
+
+Browser
+  -> frontend/src/api.js
+  -> FastAPI route
+  -> service layer
+  -> SQLAlchemy / Ollama
+  -> DB write/read or model output
+  -> response schema
+  -> frontend state update
+  -> UI render
+```
+
+```
+Skill creation + AI enrichment flow
+
+User submits skill form
+  -> POST /api/v1/skills/
+  -> backend/app/routes/skill_routes.py
+  -> create_skill(...)
+  -> insert base row into `skills`
+  -> _sync_skill_metadata(...)
+      -> generate_skill_metadata(...)
+          -> Ollama /v1/chat/completions
+          -> model: llama3.2:latest
+          -> returns normalized title/category/summary/tags
+      -> build_search_document(...)
+      -> get_text_embedding(search_document)
+          -> Ollama /v1/embeddings
+          -> model: nomic-embed-text:latest
+          -> returns vector
+      -> store:
+          -> skills.ai_summary
+          -> skills.search_document
+          -> skills.embedding_vector
+      -> replace rows in `skill_tags`
+  -> commit transaction
+  -> return enriched skill to frontend
+```
+
+```
+Semantic search + semantic match flow
+
+Natural-language search
+  User query
+    -> GET /api/v1/skills/search?q=...
+    -> search_skills(...)
+    -> embed query with nomic-embed-text:latest
+    -> load candidate skills from DB
+    -> for each skill:
+         read skills.embedding_vector
+         read skills.search_document
+         read skill_tags + owner city
+         cosine_similarity(query_embedding, skill_embedding)
+         lexical_overlap(query, search_document/tags)
+    -> blend scores
+    -> return ranked results + rationale
+
+Semantic matches
+  Current user's request skills
+    -> GET /api/v1/skills/matches/me
+    -> get_matches_for_user(...)
+    -> load my request skills
+    -> load other users' offer skills
+    -> for each request/offer pair:
+         read stored embedding vectors
+         cosine_similarity(request_embedding, offer_embedding)
+         lexical_overlap(request, offer)
+         add category/title boosts
+    -> filter by threshold
+    -> return ranked matches + rationale + shared tags
+```
+
+1. Runtime and storage
+----------------------
+
+Frontend:
+- Tooling: React, Vite, browser fetch API
+- Entry: `frontend/src/main.jsx`
+- Main UI: `frontend/src/App.jsx`
+
+Backend:
+- Tooling: FastAPI, SQLAlchemy, Alembic, JWT auth
+- Entry: `backend/app/main.py`
+- API router: `backend/app/api.py`
+
+AI runtime:
+- Tooling: Ollama OpenAI-compatible API over HTTP
+- Text generation model: `llama3.2:latest`
+- Embedding model: `nomic-embed-text:latest`
+- Client implementation: `backend/app/services/llm_service.py`
+
+Database:
+- Default DB engine: SQLite
+- Default file path: `backend/skill_exchange.db`
+- Engine/session setup: `backend/app/db/database.py`
+- Schema migrations: `backend/alembic/versions/`
+
+Persisted tables:
+- `users`
+- `skills`
+- `skill_tags`
+- `exchange_requests`
+- `chat_threads`
+- `chat_messages`
+
+AI-enriched fields stored in `skills`:
+- `ai_summary`
+- `search_document`
+- `embedding_vector`
+
+
+2. Application startup flow
+---------------------------
+
+Step 1:
+- Backend loads config from `backend/.env`
+- File: `backend/app/core/config.py`
+- Tools used:
+  - `python-dotenv` for env loading
+  - `os.getenv` for config reads
+
+Step 2:
+- Backend creates DB tables if they do not exist
+- File: `backend/app/main.py`
+- Tools used:
+  - FastAPI lifespan hook
+  - SQLAlchemy `Base.metadata.create_all`
+
+Step 3:
+- Backend backfills missing AI metadata for skills
+- File: `backend/app/main.py`
+- Service: `backend/app/services/skill_service.py::backfill_skill_metadata`
+- Tools used:
+  - SQLAlchemy session
+  - Ollama chat model for metadata when available
+  - Ollama embeddings model for vectors when available
+
+
+3. Authentication flow
+----------------------
+
+Endpoint: `POST /api/v1/auth/signup`
+- Route file: `backend/app/routes/auth_routes.py`
+- Service file: `backend/app/services/auth_services.py::create_user`
+- Input data:
+  - `name`
+  - `email`
+  - `password`
+  - optional `bio`, `city`, `profile_photo_url`
+- Tools used:
+  - FastAPI request parsing
+  - Passlib bcrypt hashing in `backend/app/utils/hashing.py`
+  - SQLAlchemy ORM write
+- Data stored in:
+  - `users.name`
+  - `users.email`
+  - `users.hashed_password`
+  - `users.bio`
+  - `users.city`
+  - `users.profile_photo_url`
+
+Endpoint: `POST /api/v1/auth/login`
+- Route file: `backend/app/routes/auth_routes.py`
+- Service file: `backend/app/services/auth_services.py::login_user`
+- Tools used:
+  - SQLAlchemy ORM read from `users`
+  - Passlib bcrypt verify
+  - JWT creation in `backend/app/utils/jwt.py`
+- Data stored:
+  - No DB write
+  - JWT returned to frontend and kept in browser localStorage
+
+Endpoint: `PUT /api/v1/users/me`
+- Route file: `backend/app/routes/user_routes.py`
+- Service file: `backend/app/services/auth_services.py::update_user_profile`
+- Data updated in:
+  - `users.name`
+  - `users.bio`
+  - `users.city`
+  - `users.profile_photo_url`
+
+
+4. AI skill assistant flow
+--------------------------
+
+Endpoint: `POST /api/v1/skills/ai-suggest`
+- Route file: `backend/app/routes/skill_routes.py`
+- Service file: `backend/app/services/llm_service.py::suggest_skill_listing`
+
+Input:
+- rough `title`
+- rough `category`
+- `description`
+- `skill_type`
+- optional `proficiency_level`
+- optional `availability`
+
+Tools used:
+- FastAPI validation
+- Ollama chat-completions endpoint at `http://localhost:11434/v1/chat/completions`
+- Model: `llama3.2:latest`
+- Fallback heuristic normalization if the local model call fails
+
+Output returned to frontend:
+- normalized `title`
+- normalized `category`
+- refined `ai_summary`
+- suggested `proficiency_level`
+- suggested `availability`
+- suggested `tag_names`
+
+Data stored:
+- None at this endpoint
+- This endpoint is advisory only
+
+
+5. Skill creation and storage flow
+----------------------------------
+
+Endpoint: `POST /api/v1/skills/`
+- Route file: `backend/app/routes/skill_routes.py`
+- Service file: `backend/app/services/skill_service.py::create_skill`
+
+Step-by-step:
+1. Insert a new row into `skills`
+2. Generate AI metadata via `generate_skill_metadata`
+3. Build `search_document`
+4. Create embedding vector via `get_text_embedding`
+5. Replace `skill_tags` rows for that skill
+6. Commit transaction
+
+Tools used:
+- SQLAlchemy ORM write
+- Ollama chat model `llama3.2:latest`
+- Ollama embeddings model `nomic-embed-text:latest`
+- JSON serialization for embedding storage
+
+Data stored in `skills`:
+- `user_id`
+- `title`
+- `category`
+- `description`
+- `skill_type`
+- `proficiency_level`
+- `availability`
+- `ai_summary`
+- `search_document`
+- `embedding_vector`
+
+Data stored in `skill_tags`:
+- one row per generated tag:
+  - `skill_id`
+  - `name`
+
+Endpoint: `PUT /api/v1/skills/{skill_id}`
+- Same enrichment pipeline as creation
+- Existing `skill_tags` rows are deleted and regenerated
+- `skills.embedding_vector` is recalculated and stored again
+
+Endpoint: `GET /api/v1/skills/`
+- Reads all skill listings
+- Returns joined owner and tags
+- Data comes from:
+  - `skills`
+  - `users`
+  - `skill_tags`
+
+Endpoint: `GET /api/v1/skills/me`
+- Same as above, filtered by current authenticated user
+
+Endpoint: `DELETE /api/v1/skills/{skill_id}`
+- Deletes the selected skill
+- Cascades remove dependent data:
+  - `skill_tags`
+  - exchange requests tied to that skill
+
+
+6. Natural-language search flow
+-------------------------------
+
+Endpoint: `GET /api/v1/skills/search?q=...`
+- Route file: `backend/app/routes/skill_routes.py`
+- Service file: `backend/app/services/skill_service.py::search_skills`
+- AI scoring file: `backend/app/services/llm_service.py::search_skill_against_query`
+
+Step-by-step:
+1. Read candidate skills from DB
+2. For each skill, read:
+  - `search_document`
+  - `embedding_vector`
+  - owner city
+  - tags
+3. Embed the incoming query using Ollama embeddings
+4. Compute cosine similarity between query embedding and `skills.embedding_vector`
+5. Blend semantic score with lexical overlap
+6. Return ranked matches with rationale
+
+Tools used:
+- SQLAlchemy ORM read
+- Ollama embeddings endpoint at `http://localhost:11434/v1/embeddings`
+- Model: `nomic-embed-text:latest`
+- Local cosine similarity math in Python
+
+Data stored:
+- No new DB writes during search
+- Reads from:
+  - `skills.embedding_vector`
+  - `skills.search_document`
+  - `skill_tags`
+  - `users.city`
+
+
+7. Semantic match generation flow
+---------------------------------
+
+Endpoint: `GET /api/v1/skills/matches/me`
+- Route file: `backend/app/routes/skill_routes.py`
+- Service file: `backend/app/services/skill_service.py::get_matches_for_user`
+- AI scoring file: `backend/app/services/llm_service.py::score_skill_match`
+
+Step-by-step:
+1. Read current user's `request` skills from `skills`
+2. Read other users' `offer` skills from `skills`
+3. For each request/offer pair:
+  - load owner and tags
+  - read stored `embedding_vector`
+  - compute cosine similarity
+  - compute lexical overlap
+  - apply category/title boosts
+4. Keep only pairs above threshold
+5. Return ranked match list
+
+Tools used:
+- SQLAlchemy ORM read
+- Stored embeddings from previous skill writes
+- Python cosine similarity and token overlap scoring
+
+Data stored:
+- No new DB writes
+- Reads from:
+  - `skills`
+  - `skill_tags`
+  - `users`
+
+
+8. Exchange request flow
+------------------------
+
+Endpoint: `POST /api/v1/exchange-requests/`
+- Route file: `backend/app/routes/exchange_request_routes.py`
+- Service file: `backend/app/services/exchange_request_service.py::create_exchange_request`
+
+Step-by-step:
+1. Validate requested skill exists
+2. Validate requested skill belongs to another user
+3. Validate requested skill is an `offer`
+4. Optionally validate the offered-back skill
+5. If message is missing, create a draft request message
+6. Insert row into `exchange_requests`
+
+Tools used:
+- SQLAlchemy ORM read/write
+- AI message draft helper:
+  - `backend/app/services/llm_service.py::draft_exchange_message`
+  - current implementation is local string generation, not a model call
+
+Data stored in `exchange_requests`:
+- `requester_id`
+- `recipient_id`
+- `requested_skill_id`
+- `offered_skill_id`
+- `message`
+- `status`
+
+Endpoint: `PATCH /api/v1/exchange-requests/{request_id}/status`
+- Updates only `exchange_requests.status`
+- Allowed state changes depend on whether requester or recipient is acting
+
+Endpoint: `GET /api/v1/exchange-requests/`
+- Reads all inbound and outbound requests for the current user
+- Returns joined:
+  - requester user
+  - recipient user
+  - requested skill
+  - offered skill
+
+
+9. Chat flow
+------------
+
+Endpoint: `POST /api/v1/chat/threads/{exchange_request_id}`
+- Route file: `backend/app/routes/chat_routes.py`
+- Service file: `backend/app/services/chat_service.py::create_or_get_thread`
+
+Rules:
+- only participants in the exchange request can open the thread
+- the exchange request must already be `accepted`
+- one chat thread per exchange request
+
+Data stored in `chat_threads`:
+- `exchange_request_id`
+- `created_at`
+- `updated_at`
+
+Endpoint: `POST /api/v1/chat/threads/{thread_id}/messages`
+- Route file: `backend/app/routes/chat_routes.py`
+- Service file: `backend/app/services/chat_service.py::create_message`
+
+Step-by-step:
+1. Validate thread exists
+2. Validate current user is a participant
+3. Validate linked exchange request is accepted
+4. Insert message row
+
+Data stored in `chat_messages`:
+- `thread_id`
+- `sender_id`
+- `content`
+- `created_at`
+
+Endpoint: `GET /api/v1/chat/threads`
+- Reads all chat threads for the current user
+- Returns joined exchange request, skills, owners, tags, and messages
+
+Endpoint: `GET /api/v1/chat/threads/{thread_id}`
+- Reads a single thread and its messages
+
+
+10. Frontend request flow
+-------------------------
+
+Frontend API wrapper:
+- File: `frontend/src/api.js`
+- Tool used: browser `fetch`
+
+Frontend state/UI:
+- File: `frontend/src/App.jsx`
+
+Frontend-to-backend flow:
+- signup/login -> `/auth/*`
+- profile -> `/users/me`
+- create/update/delete skills -> `/skills/*`
+- AI assist -> `/skills/ai-suggest`
+- semantic matches -> `/skills/matches/me`
+- NL search -> `/skills/search`
+- exchange requests -> `/exchange-requests/*`
+- chat -> `/chat/*`
+
+Frontend storage:
+- JWT token in browser localStorage under `skill_exchange_token`
+- all other app data lives in backend DB
+
+
+11. Where each kind of data lives
+---------------------------------
+
+User identity and profile:
+- table: `users`
+
+Core skill listing:
+- table: `skills`
+
+Generated tags:
+- table: `skill_tags`
+
+AI-generated summary:
+- column: `skills.ai_summary`
+
+Semantic search text:
+- column: `skills.search_document`
+
+Semantic vector:
+- column: `skills.embedding_vector`
+- stored as serialized JSON text
+
+Request workflow:
+- table: `exchange_requests`
+
+Chat thread:
+- table: `chat_threads`
+
+Chat messages:
+- table: `chat_messages`
+
+JWT session token:
+- browser localStorage
+
+
+12. Current model usage
+-----------------------
+
+Listing assistant:
+- model: `llama3.2:latest`
+- endpoint: Ollama `v1/chat/completions`
+
+Auto-tagging:
+- model: `llama3.2:latest`
+- endpoint: Ollama `v1/chat/completions`
+
+Semantic search:
+- model: `nomic-embed-text:latest`
+- endpoint: Ollama `v1/embeddings`
+
+Semantic match scoring:
+- model: `nomic-embed-text:latest`
+- uses stored embeddings generated earlier
+
+Fallback mode:
+- if local AI calls fail, parts of metadata generation and ranking degrade to deterministic heuristics

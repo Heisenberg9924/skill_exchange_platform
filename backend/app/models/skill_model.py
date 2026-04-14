@@ -23,6 +23,9 @@ class Skill(Base):
     skill_type: Mapped[SkillType] = mapped_column(SqlEnum(SkillType), nullable=False)
     proficiency_level: Mapped[str | None] = mapped_column(String(50), nullable=True)
     availability: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    ai_summary: Mapped[str | None] = mapped_column(Text, nullable=True)
+    search_document: Mapped[str | None] = mapped_column(Text, nullable=True)
+    embedding_vector: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime,
@@ -41,3 +44,24 @@ class Skill(Base):
         back_populates="offered_skill",
         foreign_keys="ExchangeRequest.offered_skill_id",
     )
+    tags = relationship(
+        "SkillTag",
+        back_populates="skill",
+        cascade="all, delete-orphan",
+        order_by="SkillTag.name",
+    )
+
+    @property
+    def tag_names(self) -> list[str]:
+        return [tag.name for tag in self.tags]
+
+
+class SkillTag(Base):
+    __tablename__ = "skill_tags"
+
+    id: Mapped[int] = mapped_column(primary_key=True, index=True)
+    skill_id: Mapped[int] = mapped_column(ForeignKey("skills.id", ondelete="CASCADE"))
+    name: Mapped[str] = mapped_column(String(60), nullable=False, index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+    skill = relationship("Skill", back_populates="tags")
